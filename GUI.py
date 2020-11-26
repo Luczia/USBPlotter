@@ -1,10 +1,19 @@
 # from tkinter import *
 # from tkinter import messagebox
 
-# from tkinter import scrolledtext
-import tkinter as Tk
+# 
+try:
+    # python 2.x
+    import Tkinter as Tk
+    from Tkinter import scrolledtext, ttk
+except ImportError:
+    # python 3.x
+    import tkinter as Tk
+    from tkinter import scrolledtext, ttk
+
+
 #from tkinter.ttk import Frame
-from tkinter import Menu, scrolledtext, ttk
+from tkinter import scrolledtext, ttk
 
 import time
 
@@ -14,66 +23,13 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
-import click
-from tkinterify import tkinterify
-
 import pandas as pd
 
 isConnected = False
 
 class Window(Tk.Frame):    
 
-    def new_file(self):
-        pass
-
-    def open_file(self):
-        pass
-
-    def save_file(self):
-        pass
-        
-    def connection(self):
-        global isConnected
-        if isConnected :
-            connectedLED.create_oval(3, 2, 26, 26, width=0, fill='red')
-            connectedLED.pack(padx=2, pady=4)
-            isConnected = False
-        else :
-            connectedLED.create_oval(3, 2, 26, 26, width=0, fill='green')
-            connectedLED.pack(padx=2, pady=4)
-            isConnected = True
-
-    def quit_software(self):
-        self.master.destroy()
-        
-    def select(self):
-        pass
-
-    def a_propos(self):
-        mon_message = messagebox.showinfo("This app plots real time data for debugging:", "AURA Project \n http://oxio-dynamics.com/en/ \n Lucas Soubeyrand")
-
-    def graph(self):
-        angle = np.random.normal(180,180,1000)
-        plt.hist(angle, 50)
-        plt.show()
-
-    def listSelect(self, val):
-        sender = val.widget
-        idx = sender.curselection()    
-        selected_text_list = [sender.get(i) for i in sender.curselection()]    
-        value =""
-        for j in idx:        
-            value += sender.get(j)
-            value+=" - "    
-        var.set(value)
-
-        cli.config(state='normal')
-        cli.delete(1.0, END)
-        cli.insert(END, value)
-        cli.config(state='disabled')
-
-        pass
-
+    
     def __init__(self, figure, master, SerialReference):
         Tk.Frame.__init__(self, master)
         self.entry = None
@@ -113,18 +69,18 @@ class Window(Tk.Frame):
 
         img_plug = Image.open("plug.png")
         img_exit = Image.open("exit.png")
-        eimg_plug = ImageTk.PhotoImage(img_plug)
-        eimg_exit = ImageTk.PhotoImage(img_exit)
+        eimg_plug = ImageTk.PhotoImage(img_plug, master=self.master)
+        eimg_exit = ImageTk.PhotoImage(img_exit, master=self.master)
 
-        connectedLED = Tk.Canvas(toolbar, width=32, height=32)
-        connectedLED.create_oval(3, 2, 26, 26, width=0, fill='red')
-        connectedLED.pack(padx=2, pady=4)
+        self.connectedLED = Tk.Canvas(toolbar, width=32, height=32)
+        self.connectedLED.create_oval(3, 2, 26, 26, width=0, fill='red')
+        self.connectedLED.pack(padx=2, pady=4)
 
-        connectButton = Tk.Button(toolbar, height=20, width=20, relief=Tk.FLAT, command=self.connection)
+        connectButton = Tk.Button(toolbar, image=eimg_plug, height=20, width=20, relief=Tk.FLAT, command=self.connection)
         connectButton.image = eimg_plug
         connectButton.pack(side=Tk.TOP, padx=2, pady=4)
 
-        exitButton = Tk.Button(toolbar, height=20, width=20, relief=Tk.FLAT, command=self.quit_software)
+        exitButton = Tk.Button(toolbar, image=eimg_exit, height=20, width=20, relief=Tk.FLAT, command=self.quit_software)
         exitButton.image = eimg_exit
         exitButton.pack(side=Tk.TOP, padx=2, pady=4)
  
@@ -134,20 +90,18 @@ class Window(Tk.Frame):
         lowbar = Tk.Frame(self.master, bg='white', height=150, relief='sunken', borderwidth=2)
         lowbar.pack(expand=True, fill='both', side='bottom', anchor='nw')
 
-        cli = scrolledtext.ScrolledText(lowbar, height=10, bg='black', fg='white')
-        #cli.insert(INSERT,'You text goes here')
-        cli.pack()
+        self.cli = Tk.scrolledtext.ScrolledText(lowbar, height=10, bg='black', fg='white')
+        self.cli.pack(expand=True, fill='both')
 
         # sidebar
         sidebar = Tk.Frame(self.master, width=200, bg='white', height=500, relief='sunken', borderwidth=2)
-        sidebar.pack(expand=False, fill='both', side='left', anchor='nw')
+        sidebar.pack(expand=True, fill='both', side='left', anchor='nw')
         lbl2 = Tk.Label(sidebar, text= 'Choose data to be sent')
         lbl2.pack()
 
-        # main content area
+        # main content area with tabs
         mainarea = Tk.Frame(self.master, bg='#CCC', width=500, height=500)
         mainarea.pack(expand=True, fill='both', side='right')
-
 
         tab_control = ttk.Notebook(mainarea)
         tab_live = ttk.Frame(tab_control)
@@ -155,16 +109,11 @@ class Window(Tk.Frame):
 
         tab_control.add(tab_live, text='LivePlot')
         tab_control.add(tab_offline, text='Desynchronous Plot')
-        lbl1 = Tk.Label(tab_live, text= 'label1')
-        lbl1.pack()
-        # lbl1.grid(column=0, row=0)
+        lbl1 = Tk.Label(tab_live, text= 'label1')        
         lbl2 = Tk.Label(tab_offline, text= 'label2')
-        # lbl2.grid(column=0, row=0)
+        lbl1.pack()       
+        
 
-        # cb = Checkbutton(sidebar, bg='white', text="VoltU", command=CheckbuttonClick )
-        # cb.pack(side='bottom')
-        # cb.select()
-        # cb.place(x=5, y=25)
 
         physical_quantity = ['VoltU', 'VoltV', 'VoltW',
                     'CurU', 'CurV', 'CurW',
@@ -179,8 +128,8 @@ class Window(Tk.Frame):
 
         lb.pack(pady=15)
 
-        var = Tk.StringVar()
-        label = Tk.Label(sidebar, text=0, textvariable=var)
+        self.var = Tk.StringVar()
+        label = Tk.Label(sidebar, text=0, textvariable=self.var)
         label.pack()
 
         canvas = FigureCanvasTkAgg(figure, master=tab_live)
@@ -188,6 +137,64 @@ class Window(Tk.Frame):
         canvas.get_tk_widget().pack(side=Tk.TOP, fill=Tk.BOTH, expand=1)
 
         tab_control.pack(expand=1, fill='both')
+
+    def new_file(self):
+        pass
+
+    def open_file(self):
+        pass
+
+    def save_file(self):
+        pass
+        
+    def connection(self):
+        global isConnected
+        if isConnected :
+            self.connectedLED.create_oval(3, 2, 26, 26, width=0, fill='red')
+            self.connectedLED.pack(padx=2, pady=4)
+            isConnected = False
+            self.updateCLI("Disconection\n")
+        else :
+            self.connectedLED.create_oval(3, 2, 26, 26, width=0, fill='green')
+            self.connectedLED.pack(padx=2, pady=4)
+            isConnected = True
+            self.updateCLI("Conection\n")
+
+    def quit_software(self):
+        self.master.destroy()
+        
+    def select(self):
+        pass
+
+    def a_propos(self):
+        mon_message = Tk.messagebox.showinfo("This app plots real time data for debugging:", "AURA Project \n http://oxio-dynamics.com/en/ \n Lucas Soubeyrand")
+
+    def graph(self):
+        angle = np.random.normal(180,180,1000)
+        plt.hist(angle, 50)
+        plt.show()
+
+    def listSelect(self, val):
+        sender = val.widget
+        idx = sender.curselection()    
+        selected_text_list = [sender.get(i) for i in sender.curselection()]    
+        value =""
+        for j in idx:        
+            value += sender.get(j)
+            value+=" - "    
+        self.var.set(value)
+
+        string = "New variable selected: "+value+"\n"
+        self.updateCLI(string)
+        pass
+
+    def updateCLI(self,str):
+        self.cli.config(state='normal')
+        # cli.delete(1.0, END)
+        self.cli.insert(Tk.END, str)
+        self.cli.config(state='disabled')
+        self.cli.see("end")
+
 
 
 class serialPlot:
@@ -199,6 +206,7 @@ class serialPlot:
         self.numPlots = numPlots
         self.rawData = bytearray(numPlots * dataNumBytes)
         self.dataType = None
+        self.previousTimer = 0
     
     def getSerialData(self, frame, lines, lineValueText, lineLabel, timeText):
         currentTimer = time.process_time()
