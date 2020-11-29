@@ -18,7 +18,8 @@ from PIL import ImageTk, Image
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.widgets import Slider
 
 import pandas as pd
 from threading import Thread
@@ -31,15 +32,18 @@ class Window(Tk.Frame):
     
     physical_quantity = ['VoltU', 'VoltV', 'VoltW',  'CurU', 'CurV', 'CurW',  'HardEnc', 'Mot', 'SofEnc'] 
     selected_data = []
-
-    xmin= 0
-    xmax = 100
-    ymin = -(1)
-    ymax = 1
-    ax = plt.axes()
+    
     lines = []
     lineValueText = []
     lineLabel = []
+      
+    x=[]
+    y1=[]
+    y2=[]
+    y3=[]
+    y4=[]
+    y5=[]
+
      
     def __init__(self, figure, master, SerialReference):
         Tk.Frame.__init__(self, master)
@@ -49,6 +53,11 @@ class Window(Tk.Frame):
         self.serialReference = SerialReference      # keep a reference to our serial connection so that we can use it for bi-directional communicate from this class
         self.figure = figure
         self.initWindow(figure, SerialReference)     # initialize the window with our settings
+        self.previousTimer = 0
+        self.xmin = 0
+        self.xmax = 20
+        self.ymin = -2
+        self.ymax = 2
         
 
     def initWindow(self, figure, SerialReference):
@@ -56,15 +65,7 @@ class Window(Tk.Frame):
         self.master.geometry("1080x720")
         self.master.iconbitmap('Logo Small.ico')       
 
-        xmin = 0
-        xmax = 2
-        ymin = -(2)
-        ymax = 2
-        self.ax = plt.axes(xlim=(xmin, xmax), ylim=(float(ymin - (ymax - ymin) / 10), float(ymax + (ymax - ymin) / 10)))
-        self.ax.set_xlabel("Time")
-        self.ax.set_ylabel("STM32 Output")
-        self.line, = self.ax.plot([], [], lw=2)
-        
+             
                         
         #barremenu
         barremenu = Tk.Menu(self.master)
@@ -146,12 +147,15 @@ class Window(Tk.Frame):
         self.var = Tk.StringVar()
         label = Tk.Label(sidebar, text=0, textvariable=self.var)
         label.pack()
-
+        
+        plt.style.use('ggplot') #More sophisticated background
+        self.ax = plt.axes()
+        self.spos = Slider(self.ax, 'Pos', 2, 90.0)
+        self.spos.on_changed(self.sliderUpdate)
         canvas = FigureCanvasTkAgg(figure, master=tab_live)
         canvas.get_tk_widget().pack(side=Tk.TOP, fill=Tk.BOTH, expand=1)
 
         tab_control.pack(expand=1, fill='both')
-
        
 
     def new_file(self):
@@ -192,6 +196,10 @@ class Window(Tk.Frame):
         plt.hist(angle, 50)
         plt.show()
 
+    def sliderUpdate(self, val):
+        pos = spos.val
+        self.x.axis([pos,pos+10,-1,1])
+
     def listSelect(self, val):
         sender = val.widget
         idx = sender.curselection()    
@@ -217,32 +225,71 @@ class Window(Tk.Frame):
         self.cli.see("end")
     
     def updatePlotLabels(self):
+
+        try :
+            self.anim.event_source.stop()            
+        except :
+            print("First Launch - Can't Stop anim")
         
         self.lineLabel = self.selected_data 
         style = ['lightcoral', 'black', 'chocolate', 'palegreen', 'gold', 'darkorange', 'forestgreen', 'deepskyblue', 'slategray', 'navy', 'indigo', 'mangenta' ,'lightpink' ]  # linestyles for the different plots
         
+        self.ax.clear()
+        self.ax.set_xlim([self.xmin,self.xmax])
+        self.ax.set_ylim([self.ymin,self.ymax])
+        # self.ax.set_autoscalex_on(True)
+        self.ax.set_xlabel("Time")
+        self.ax.set_ylabel("STM32 Output")
+        self.line, = self.ax.plot([], [], linewidth=2)
+
         for self.line in self.lines:
             self.line.remove()
-            del self.line
+            del self.line            
         self.lines[:] = []
-
-        print("length")
-        print(len(self.selected_data))
+        
         for i in range(len(self.selected_data)):
             self.lines.append(self.ax.plot([], [], style[i],label=self.lineLabel[i])[0])
             # self.lineValueText.append(self.ax.text(0.70, 0.90-i*0.05, '', transform=self.ax.transAxes))
 
-        print(self.selected_data)        
-        self.ax.legend(frameon=False, loc='upper center', ncol=2)    
-        self.anim = animation.FuncAnimation(self.figure, self.animate, init_func=self.init_anim, frames=100, interval=20, blit=False)   
-        # anim = animation.FuncAnimation(self.figure, self.serialReference.plotSerialData, fargs=(self.lines, self.lineValueText, self.lineLabel), interval=50)         
+        print(self.selected_data)
+        self.timeText = self.ax.text(0.70, 0.95, '', transform=self.ax.transAxes)
+        self.timeText.set_text('Plot Interval = ' + 'X' + 'ms')        
+        self.ax.legend(frameon=False, loc='upper center', ncol=2) 
+        # self.anim = animation.FuncAnimation(self.figure, self.animate, init_func=self.init_anim, frames=20, interval=20, blit=False)    
+        self.anim = animation.FuncAnimation(self.figure, self.animate2, self.serialReference.genData, init_func=self.init_anim, interval=10, blit=False)   
+           
 
     def init_anim(self):   
         for self.line in self.lines:
             self.line.set_data([], [])    
-        return self.lines
+        return self.lines  
+    
+    def animate2(self, frame):
+        i = time.process_time()
+        # print(i)
+        currentTimer = time.process_time()
+        plotTimer = int((currentTimer - self.previousTimer) * 1000)     # the first reading will be erroneous
+        self.previousTimer = currentTimer
+        self.timeText.set_text('Plot Interval = ' + str(plotTimer) + 'ms')   
+
+        self.x.append(i)        
+        self.y1.append(np.sin(2 * np.pi * (i - 0.01 * i)))
+        self.y2.append(np.sin(2 * np.pi * (i - 0.01 * i))+0.25)
+        self.y3.append(np.sin(2 * np.pi * (i+0.3 - 0.01 * i))-0.25)
+        self.y4.append(np.sin(2 * np.pi * (i+0.5 - 0.01 * i))-0.5)
+        self.y5.append(np.sin(3 * np.pi * (i+0 - 0.01 * i*2)))
+        
+        # for j in range(len(self.lines)):
+        self.lines[0].set_data(self.x, self.y1)
+        self.lines[1].set_data(self.x, self.y2)
+        self.lines[3].set_data(self.x, self.y3)
+        
+        if(i > self.xmax):
+            self.ax.set_xlim([i-self.xmax,i])
+        
 
     def animate(self, i):
+        print(i)
         x = np.linspace(0, 2, 1000)
         y=[]
         y.append(np.sin(2 * np.pi * (x - 0.01 * i)))
@@ -252,37 +299,31 @@ class Window(Tk.Frame):
         y.append(np.sin(3 * np.pi * (x+ - 0.01 * i*2)))
         for j in range(len(self.lines)):
             self.lines[j].set_data(x, y[j])
-        #     line.set_data(x, y1) # set data for each line separately.    
-        # self.lines[0].set_data(x, y[0])
-        # self.lines[1].set_data(x, y[1])
-        # self.lines[2].set_data(x, y[2])
-        # self.lines[3].set_data(x, y[3])
-        # self.lines[4].set_data(x, y[4])
-        return self.lines
-
+      
 
 class serialPlot:
 
     physical_quantity = ['VoltU', 'VoltV', 'VoltW',  'CurU', 'CurV', 'CurW',  'HardEnc', 'Mot', 'SofEnc']
     physical_quantity.append('Time')
     data_amount = 2 
-       
 
     def __init__(self, serialPort='/dev/ttyUSB0', serialBaud=38400, plotLength=100, dataNumBytes=2, numPlots=1):
         self.port = serialPort
         self.baud = serialBaud
-        self.plotMaxLength = plotLength
+        self.plotMaxLength = plotLength #Number of data plotted in the x axis
         self.dataNumBytes = dataNumBytes
-        self.numPlots = 10
+        self.numPlots = 10  #TODO : Link with get_list number or use as SUPERRGLOBAL   #len(self.physical_quantity)
         self.rawData = bytearray(numPlots * dataNumBytes)
         self.dataType = None
         if dataNumBytes == 2:
             self.dataType = 'h'     # 2 byte integer
         elif dataNumBytes == 4:
             self.dataType = 'f'     # 4 byte float
+        #self.datalist = [[0 for i in range(len(self.physical_quantity))] for j in range(self.data_amount)] 
         self.data = []
-        for i in range(numPlots):   # give an array for each type of data and store them in a list
+        for i in range(self.numPlots):   # give an array for each type of data and store them in a list
             self.data.append(collections.deque([0] * plotLength, maxlen=plotLength))
+            
         self.isRun = True
         self.isReceiving = False
         self.thread = None
@@ -309,16 +350,15 @@ class serialPlot:
             while self.isReceiving != True:
                 time.sleep(0.1)
 
-    def genData(self):
-        #self.datav = [0 for i in range(self.data_amount)]    
-        self.datalist = [[0 for i in range(len(self.physical_quantity))] for j in range(self.data_amount)] 
-        
+    def genData(self):        
         x = self.timer        
         # datalist = collections.deque([0]*data_amount,data_amount)
-        for y in range(len(self.physical_quantity)):
-            self.datalist[0][y] = np.sin(2 * np.pi * x)+y/10            
-        print(self.datalist)
+        # for y in range(len(self.physical_quantity)):
+        #     self.datalist[0][y] = np.sin(2 * np.pi * x)+y/10            
+        # print(self.datalist)
         self.timer = self.timer+1
+        while True:
+            yield np.random.rand(100)
     
     def backgroundThread(self):    # retrieve data
         time.sleep(1.0)  # give some buffer time for retrieving data
@@ -338,23 +378,17 @@ class serialPlot:
         # df = pd.DataFrame(self.csvData)
         # df.to_csv('/home/rikisenia/Desktop/data.csv')
     
-    def plotSerialData(self, frame, lines, lineValueText, lineLabel):
+    def plotSerialData(self, frame, lines, lineLabel, timeText):
         currentTimer = time.process_time()
         self.plotTimer = int((currentTimer - self.previousTimer) * 1000)     # the first reading will be erroneous
         self.previousTimer = currentTimer
-               
-        #timeText.set_text('Plot Interval = ' + str(self.plotTimer) + 'ms')
-        # privateData = copy.deepcopy(self.rawData[:])    # so that the 3 values in our plots will be synchronized to the same sample time
-        genData()
-              
-        for i in range(len(lines)):#self.numPlots):
-            # data = privateData[(i*self.dataNumBytes):(self.dataNumBytes + i*self.dataNumBytes)]
-            # print(data)
-            # value,  = struct.unpack(self.dataType, data)
-            self.data[i].append(self.datalist[0][i])    # we get the latest data point and append it to our array
-            lines[i].set_data(range(self.plotMaxLength), self.data[i])
-            # lineValueText[i].set_text('[' + lineLabel[i] + '] = ' + str(value))
-    
+        timeText.set_text('Plot Interval = ' + str(self.plotTimer) + 'ms')               
+        don = frame
+        x = currentTimer
+        updated_y = np.cos(x-0.05*x)    
+        lines[0].set_xdata(x)
+        lines[0].set_ydata(updated_y)
+   
 
 def main():
     # portName = 'COM5'
@@ -369,31 +403,11 @@ def main():
     pltInterval = 50    # Period at which the plot animation updates [ms]
     
     fig = plt.figure(figsize=(10, 8))
-    
-    #   ax.set_xlabel("Time")
-    #     ax.set_ylabel("STM32 Output")
-        
-    #     lineLabel = self.selected_data 
-    #     style = ['lightcoral', 'black', 'chocolate', 'palegreen', 'gold', 'darkorange', 'forestgreen', 'deepskyblue', 'slategray', 'navy', 'indigo', 'mangenta' ,'lightpink' ]  # linestyles for the different plots
-    #     timeText = ax.text(0.70, 0.95, '', transform=ax.transAxes)
-    #     lines = []
-    #     lineValueText = []
-    #     for i in range(len(self.selected_data)):
-    #         lines.append(ax.plot([], [], style[i], label=lineLabel[i])[0])
-    #         lineValueText.append(ax.text(0.70, 0.90-i*0.05, '', transform=ax.transAxes))
-
-
-
-
+  
     # put our plot onto Tkinter's GUI
     root = Tk.Tk()    
     app = Window(fig, root, s)
-
-    # app.updatePlotLabels()   
-    # anim = animation.FuncAnimation(fig, s.plotSerialData, fargs=(lines, lineValueText, lineLabel, timeText), interval=pltInterval)    # fargs has to be a tuple
     
-
-    # plt.legend(loc="upper left")
     root.mainloop()   # use this instead of plt.show() since we are encapsulating everything in Tkinter
 
     s.close()
@@ -401,29 +415,5 @@ def main():
 
 
 
-
-
 if __name__ == '__main__':
     main()
-
-
-
-
-# container = tk.Frame(self)
-# container.pack(side="top", fill="both", expand = True)
-# container.grid_rowconfigure(0,weight=1)
-# container.grid_columncoinfigure(0, weight=1)
-
-# lg=300
-# ht=200
-# bw=50
-# zf=10
-# dessin=Canvas(tab_live, bg="ivory", width=lg,height=ht, bd=bw,  highlightthickness=zf, highlightbackground="sky blue")
-# dessin.pack(side='left', padx=20, pady=20)
-
-# my_button = Button(sidebar, text ="Send", command=graph)
-# my_button.pack()
-
-# window.mainloop()
-
-
