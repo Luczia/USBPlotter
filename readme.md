@@ -3,7 +3,7 @@
 A Live Plotter GUI to log data in real time from USART over USB on a STM32 connection
 
 ## GUI visual :
-[logo]: https://https://github.com/Luczia/USBPlotter/raw/master/src/visuals/CAPTURE.png "Photo of GUI"
+![GUI]: (https://https://github.com/Luczia/USBPlotter/visuals/Capture.PNG  "Photo of GUI")
 
 
 ## Installation Instructions :
