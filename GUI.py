@@ -14,6 +14,7 @@ import time
 import serial
 import collections
 import struct
+import copy
 
 from PIL import ImageTk, Image
 import numpy as np
@@ -43,25 +44,33 @@ class Window(Tk.Frame):
 	y3=[]
 	y4=[]
 	y5=[]
+	
+	xmin = xmax = ymin = ymax = 0
 
 	 
-	def __init__(self, figure, master, SerialReference):
+	def __init__(self, figure, master, SerialReference, pltInterval):
 		Tk.Frame.__init__(self, master)
 		self.entry = None
 		self.setPoint = None
 		self.master = master		# a reference to the master window
 		self.serialReference = SerialReference		# keep a reference to our serial connection so that we can use it for bi-directional communicate from this class
 		self.figure = figure
+		self.pltInterval = pltInterval
 		self.initWindow(figure, SerialReference)	 # initialize the window with our settings
 		self.previousTimer = 0
 		self.xmin = 0
 		self.xmax = 20
 		self.ymin = -2
-		self.ymax = 2
+		self.ymax = 6
 		self.dataNumBytes = 2
+		if self.dataNumBytes == 2:
+			self.dataType = 'e'		# 2 byte integer h  | https://docs.python.org/3/library/struct.html 
+		elif self.dataNumBytes == 4:
+			self.dataType = 'f'		# 4 byte float	 f
 		self.plotMaxLength = 100 #Number of data plotted in the x axis
 		self.numPlots = 10	#TODO : Link with get_list number or use as SUPERRGLOBAL   #len(self.physical_quantity)
 		self.data = []
+		self.rawData = []
 		for i in range(self.numPlots):   # give an array for each type of data and store them in a list
 			self.data.append(collections.deque([0] * self.plotMaxLength, maxlen=self.plotMaxLength))
 		
@@ -260,99 +269,68 @@ class Window(Tk.Frame):
 		self.timeText = self.ax.text(0.70, 0.95, '', transform=self.ax.transAxes)
 		self.timeText.set_text('Plot Interval = ' + 'X' + 'ms')		   
 		self.ax.legend(frameon=False, loc='upper center', ncol=2) 
-		# self.anim = animation.FuncAnimation(self.figure, self.animate, init_func=self.init_anim, frames=20, interval=20, blit=False)	  
-		self.anim = animation.FuncAnimation(self.figure, self.animate2, self.serialReference.genData, init_func=self.init_anim, interval=10, blit=False)   
-		   
+
+		
+		# self.anim = animation.FuncAnimation(fig=self.figure, func=self.animate, frames=self.serialReference.genData,  init_func=self.init_anim, interval=self.pltInterval, blit=False,  fargs=(serialRef))   
+		self.anim = animation.FuncAnimation(fig=self.figure, func=self.animate, fargs=(self.serialReference.rawData, 4), init_func=self.init_anim, interval=self.pltInterval, blit=False,  )   
 
 	def init_anim(self):   
 		for self.line in self.lines:
 			self.line.set_data([], [])	  
 		return self.lines  
+
 	
-	def animate2(self, frame):
-		
-		print(i)
+	def animate(self, frame, serialRefData, numPlots):
+				
 		currentTimer = time.process_time()
 		plotTimer = int((currentTimer - self.previousTimer) * 1000)		# the first reading will be erroneous
 		self.previousTimer = currentTimer
 		self.timeText.set_text('Plot Interval = ' + str(plotTimer) + 'ms')
 		
-		privateData = copy.deepcopy(self.rawData[:])
+		privateData = copy.deepcopy(serialRefData)
+		# privateData = copy.deepcopy(frame)
 		for i in range(self.numPlots):
 			data = privateData[(i*self.dataNumBytes):(self.dataNumBytes + i*self.dataNumBytes)]
 			value,  = struct.unpack(self.dataType, data)
-			self.data[i].append(value)    # we get the latest data point and append it to our array
+			if value > 0.01 or value < -0.01 :
+				self.data[i].append(value)    # we get the latest data point and append it to our array
+				print(value)
 		
 		for i in range(len(self.lines)):
-			lines[i].set_data(range(self.plotMaxLength), self.data[i])
-
-		i = time.process_time()
-		# self.x.append(i)		
-		# self.y1.append(np.sin(2 * np.pi * (i - 0.01 * i)))
-		# self.y2.append(np.sin(2 * np.pi * (i - 0.3 * i))+0.25)
-		# self.y3.append(np.sin(2 * np.pi * (i+0.3 - 0.2 * i))-0.25)
-		# self.y4.append(np.sin(2 * np.pi * (i+0.5 - 0.01 * i))-0.5)
-		# self.y5.append(np.sin(3 * np.pi * (i+0 - 0.01 * i*2)))
+			self.lines[i].set_data(range(self.plotMaxLength), self.data[i])
 		
-		# for j in range(len(self.lines)):
-		# self.lines[0].set_data(self.x, self.y1)
-		# self.lines[1].set_data(self.x, self.y2)
-		# self.lines[2].set_data(self.x, self.y3)
-		# self.lines[3].set_data(self.x, self.y4)
-		# self.lines[4].set_data(self.x, self.y5)
-		
-		if(i > self.xmax):
-			self.ax.set_xlim([i-self.xmax,i])
-		
+		if(currentTimer > self.xmax):
+			self.ax.set_xlim([currentTimer-self.xmax,currentTimer])
+			  
 
-	def animate(self, i):
-		print(i)
-		x = np.linspace(0, 2, 1000)
-		y=[]
-		y.append(np.sin(2 * np.pi * (x - 0.01 * i)))
-		y.append(np.sin(2 * np.pi * (x - 0.01 * i))+0.25)
-		y.append(np.sin(2 * np.pi * (x+0.3 - 0.01 * i))-0.25)
-		y.append(np.sin(2 * np.pi * (x+0.5 - 0.01 * i))-0.5)
-		y.append(np.sin(3 * np.pi * (x+ - 0.01 * i*2)))
-		for j in range(len(self.lines)):
-			self.lines[j].set_data(x, y[j])
-	  
-
-class serialPlot:
+class serialExtract:
 
 	physical_quantity = ['VoltU', 'VoltV', 'VoltW',	 'CurU', 'CurV', 'CurW',  'HardEnc', 'Mot', 'SofEnc']
 	physical_quantity.append('Time')
 	data_amount = 2 
 
-	def __init__(self, serialPort='/dev/ttyUSB0', serialBaud=38400, plotLength=100, dataNumBytes=2, numPlots=1):
+	def __init__(self, serialPort='/dev/ttyUSB0', serialBaud=115200, dataNumBytes=2):
+		
 		self.port = serialPort
 		self.baud = serialBaud		
 		self.dataNumBytes = dataNumBytes		
-		self.rawData = bytearray(numPlots * dataNumBytes)
-		self.dataType = None
-		if dataNumBytes == 2:
-			self.dataType = 'h'		# 2 byte integer
-		elif dataNumBytes == 4:
-			self.dataType = 'f'		# 4 byte float		
-			
+		self.rawData = bytearray(len(self.physical_quantity) * dataNumBytes)
+				
 		self.isRun = True
 		self.isReceiving = False
 		self.thread = None
-		# self.plotTimer = 0
-		# self.previousTimer = 0
-		# self.timer = 0
-	  
 
-	def connectSerialBus(self):
-		self.isRun = True
+	  
+	def connectSerialBus(self):		
 		print('Trying to connect to: ' + str(self.port) + ' at ' + str(self.baud) + ' BAUD.')
 		try:
 			self.serialConnection = serial.Serial(self.port, self.baud, timeout=4)
 			print('Connected to ' + str(self.port) + ' at ' + str(self.baud) + ' BAUD.')
+			self.isRun = True
 		except:
 			print("Failed to connect with " + str(self.port) + ' at ' + str(self.baud) + ' BAUD.')
 		#start thread
-		if self.thread == None:
+		if self.thread == None and self.isRun == True:
 			self.thread = Thread(target=self.backgroundThread)
 			self.thread.start()
 			# Block till we start receiving values
@@ -361,80 +339,64 @@ class serialPlot:
 
 	def genData(self):		  
 		i = time.process_time()
-		cur_data = [  struct.pack(self.dataType = 'h'	,  np.sin(2 * np.pi * (i - 0.01 * i))            )
-					, struct.pack(self.dataType = 'h'	,  np.sin(2 * np.pi * (i - 0.3 * i))+0.25        )
-					, struct.pack(self.dataType = 'h'	,  np.sin(2 * np.pi * (i+0.3 - 0.2 * i))-0.25    )
-					, struct.pack(self.dataType = 'h'	,  np.sin(2 * np.pi * (i+0.5 - 0.01 * i))-0.5    )
-					, struct.pack(self.dataType = 'h'	,  np.sin(3 * np.pi * (i+0 - 0.01 * i*2))        )
-					, struct.pack(self.dataType = 'h'	, np.sin(3 * np.pi * (i+0 - 0.01 * i*2))         )
-					, struct.pack(self.dataType = 'h'	,  np.sin(4 * np.pi * (i+0 - 0.5 * i*5))         )
-					, struct.pack(self.dataType = 'h'	,  np.sin(2 * np.pi * (i+0 - 0.01 * i*2))+0.3    )
-					, struct.pack(self.dataType = 'h'	,  np.sin(1 * np.pi * (i+0 - 0.1 * i*3))         )
-					, struct.pack(self.dataType = 'h'	,  i   )
-					]
-		data_bytearray = bytearray(cur_data)
-		
-		
-		# self.y1.append(np.sin(2 * np.pi * (i - 0.01 * i)))
-		# self.y2.append(np.sin(2 * np.pi * (i - 0.3 * i))+0.25)
-		# self.y3.append(np.sin(2 * np.pi * (i+0.3 - 0.2 * i))-0.25)
-		# self.y4.append(np.sin(2 * np.pi * (i+0.5 - 0.01 * i))-0.5)
-		# self.y5.append(np.sin(3 * np.pi * (i+0 - 0.01 * i*2)))
-		return data_bytearray
-		# while True:
-			# yield np.random.rand(100)
+
+		y1 = (np.sin(2 * np.pi * (i)))
+		y2 = (np.sin(2 * np.pi * (2*i)+0.25))
+		y3 = (np.sin(2 * np.pi * (3*i))-0.25)
+		y4 = (np.sin(2 * np.pi * (4*i)-0.5))
+		y5 = (np.sin(3 * np.pi * (2*i+0 - 0.01 * i*2)))
+		y6 = (np.sin(3 * np.pi * (3*i+0 - 0.01 * i*2)))
+		y7 = (np.sin(3 * np.pi * (i+1 - 0.01 * i*2)))
+		y8 = (np.sin(3 * np.pi * (i+0 - 0.4 * i*3))-0.1)
+		y9 = (np.sin(3 * np.pi * (i+2 - 0.01 * i*2))+1)
+
+		cur_data = struct.pack('10e', y1,y2,y3,y4,y5,y6,y7,y8,y9,i) #'10e' cause we plot 10 float on 2 bytes => https://docs.python.org/3/library/struct.html 
+		print("GenData")
+		print(i)		
+		return cur_data  #yield means we provide an iterable accesible only once
+				
 	
 	def backgroundThread(self):	   # retrieve data
-		time.sleep(1.0)	 # give some buffer time for retrieving data
-		# self.serialConnection.reset_input_buffer()
-		print("log/n")
-		while (self.isRun):
-			self.rawData = bytearray(b"abcdefghij")
+		time.sleep(1.0)  # give some buffer time for retrieving data
+        # self.serialConnection.reset_input_buffer()
+		while(self.isRun):
 			# self.serialConnection.readinto(self.rawData)
+			time.sleep(0.1)
+			self.rawData = self.genData()
+			# print(self.rawData)
 			self.isReceiving = True
-			print(self.rawData)
-
+			#print(self.rawData)
+	
 	def disconnectSerialBus(self):
 		self.isRun = False		 
 		self.thread.join() 
-		self.serialConnection.close()
-		print('Disconnected...')
+		try :
+			self.serialConnection.close()
+			print('Disconnected...')
+		except :
+			print("No Connection to close")
 		# df = pd.DataFrame(self.csvData)
 		# df.to_csv('/home/rikisenia/Desktop/data.csv')
-	
-	def plotSerialData(self, frame, lines, lineLabel, timeText):
-		currentTimer = time.process_time()
-		self.plotTimer = int((currentTimer - self.previousTimer) * 1000)	 # the first reading will be erroneous
-		self.previousTimer = currentTimer
-		timeText.set_text('Plot Interval = ' + str(self.plotTimer) + 'ms')				 
-		don = frame
-		x = currentTimer
-		updated_y = np.cos(x-0.05*x)	
-		lines[0].set_xdata(x)
-		lines[0].set_ydata(updated_y)
-   
 
 def main():
 	# portName = 'COM5'
 	portName = '/dev/ttyUSB0'
-	baudRate = 38400
-	maxPlotLength = 100		# number of points in x-axis of real time plot
+	baudRate = 115200	
 	dataNumBytes = 4		# number of bytes of 1 data point
-	s = serialPlot(portName, baudRate, maxPlotLength, dataNumBytes)	  # initializes all required variables
+	s = serialExtract(portName, baudRate, dataNumBytes)	  # initializes all required variables
 	# s.readSerialStart()												# starts background thread
-
-	# plotting starts below
-	pltInterval = 50	# Period at which the plot animation updates [ms]
+	maxPlotLength = 100		# number of points in x-axis of real time plot
+	pltInterval = 100	# Period at which the plot animation updates [ms]
 	
 	fig = plt.figure(figsize=(10, 8))
   
 	# put our plot onto Tkinter's GUI
 	root = Tk.Tk()	  
-	app = Window(fig, root, s)
+	app = Window(fig, root, s, pltInterval)
 	
 	root.mainloop()	  # use this instead of plt.show() since we are encapsulating everything in Tkinter
 
-	s.close()
+	s.disconnectSerialBus()
 
 
 
