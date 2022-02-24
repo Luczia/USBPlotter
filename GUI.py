@@ -80,7 +80,7 @@ class Window(Tk.Frame):
         self.initWindow(figure)     # initialize the window with our settings
 
     def initWindow(self, figure):
-        self.master.title("MCARA Real Time Plot")
+        self.master.title("Basic Real Time Plot")
         self.master.geometry("1080x720")
         self.master.iconbitmap('Logo Small.ico')
                         
