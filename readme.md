@@ -1,12 +1,12 @@
 # USBPlotter
 
-##Presentation:
+## Presentation:
 This is a basic plot software that enables to connect to a ST32 board and plot in realtime up to 9 signals ( could be provided by ADCs or others)
-![Demo of Basic Plotter](media/HMI.png)
+![Demo of Basic Plotter](media/HMI.png)  
 
 
 
-##Getting Started:
+## Getting Started:
 
 0. Install the appropriate runtime environment
 
